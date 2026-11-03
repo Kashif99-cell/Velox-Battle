@@ -2,92 +2,199 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>VELOX BATTLE</title>
+<title>VELOX BATTLE 3D</title>
 <style>
-*{box-sizing:border-box}
-body{margin:0;background:#101923;color:white;font-family:Arial;text-align:center}
-h1{color:#16d9ff}
-canvas{width:96%;max-width:700px;background:#426c48;border:3px solid #16d9ff;border-radius:12px;touch-action:none}
-button{padding:14px;margin:5px;border:0;border-radius:10px;background:#087fba;color:white;font-weight:bold;font-size:17px}
-#info{font-size:17px;margin:10px}
+body{margin:0;overflow:hidden;background:#101923;font-family:Arial;color:white}
+#hud{position:absolute;top:12px;left:12px;z-index:2;background:#111c;padding:12px;border-radius:12px}
+#title{color:#00eaff;font-size:23px;font-weight:bold}
+#controls{position:absolute;bottom:18px;width:100%;display:flex;justify-content:space-around;align-items:end;z-index:3}
+button{background:#087fae;color:white;border:2px solid #5beaff;border-radius:12px;padding:14px;font-weight:bold}
+.pad{display:grid;grid-template-columns:repeat(3,48px);gap:4px}
+.pad button{padding:12px 5px}
+#fire{background:#c52c35;padding:23px;border-radius:50%}
+#message{position:absolute;top:45%;width:100%;text-align:center;font-size:24px;font-weight:bold;pointer-events:none}
 </style>
 </head>
 <body>
-<h1>VELOX BATTLE</h1>
-<div id="info">❤️ Health: 100 | ⭐ Score: 0</div>
-<canvas id="game" width="700" height="450"></canvas>
-<div>
-<button onclick="move('up')">⬆️</button><br>
-<button onclick="move('left')">⬅️</button>
-<button onclick="move('down')">⬇️</button>
-<button onclick="move('right')">➡️</button>
-<br><button onclick="fire()">🎯 FIRE</button>
-<button onclick="start()">RESTART</button>
+<div id="hud">
+<div id="title">VELOX BATTLE 3D</div>
+❤️ Health: <span id="hp">100</span><br>
+🎯 Kills: <span id="kills">0</span><br>
+🤖 Enemies: <span id="count">5</span>
 </div>
-<p id="msg">Press RESTART to play!</p>
-<script>
-const c=document.getElementById("game");
-const ctx=c.getContext("2d");
-let player={x:350,y:225};
-let targets=[],score=0,health=100,playing=false;
-let bullets=[];
-function start(){
-player={x:350,y:225};
-targets=[];bullets=[];score=0;health=100;playing=true;
-for(let i=0;i<6;i++){
-targets.push({x:40+Math.random()*620,y:40+Math.random()*370,alive:true});
+<div id="message">VELOX BATTLE</div>
+<div id="controls">
+<div class="pad">
+<span></span><button data-m="up">⬆</button><span></span>
+<button data-m="left">⬅</button><button data-m="down">⬇</button><button data-m="right">➡</button>
+</div>
+<button id="fire">FIRE</button>
+</div>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x83c9ed);
+scene.fog=new THREE.Fog(0x83c9ed,35,100);
+
+const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,.1,200);
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
+renderer.shadowMap.enabled=true;
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xffffff,0x405b38,2));
+const sun=new THREE.DirectionalLight(0xffffff,2);
+sun.position.set(20,35,15);
+scene.add(sun);
+
+const ground=new THREE.Mesh(
+ new THREE.PlaneGeometry(150,150),
+ new THREE.MeshStandardMaterial({color:0x477b40})
+);
+ground.rotation.x=-Math.PI/2;
+scene.add(ground);
+
+const water=new THREE.Mesh(
+ new THREE.PlaneGeometry(200,200),
+ new THREE.MeshStandardMaterial({color:0x247fae})
+);
+water.rotation.x=-Math.PI/2;
+water.position.y=-.4;
+scene.add(water);
+
+const player=new THREE.Group();
+const body=new THREE.Mesh(
+ new THREE.CapsuleGeometry(.42,.9,4,8),
+ new THREE.MeshStandardMaterial({color:0x13b9e9})
+);
+body.position.y=.9;
+player.add(body);
+
+const head=new THREE.Mesh(
+ new THREE.SphereGeometry(.28,12,10),
+ new THREE.MeshStandardMaterial({color:0xe8b58c})
+);
+head.position.y=1.65;
+player.add(head);
+
+const gun=new THREE.Mesh(
+ new THREE.BoxGeometry(.15,.16,.9),
+ new THREE.MeshStandardMaterial({color:0x222831})
+);
+gun.position.set(.42,1.05,-.45);
+player.add(gun);
+scene.add(player);
+
+const enemies=[];
+const enemyMat=new THREE.MeshStandardMaterial({color:0xe14c39});
+function makeEnemy(x,z){
+ const g=new THREE.Group();
+ const b=new THREE.Mesh(new THREE.CapsuleGeometry(.4,.8,4,8),enemyMat);
+ b.position.y=.8;g.add(b);
+ const h=new THREE.Mesh(new THREE.SphereGeometry(.26,10,8),new THREE.MeshStandardMaterial({color:0xd7a27c}));
+ h.position.y=1.55;g.add(h);
+ g.position.set(x,0,z);
+ scene.add(g);
+ enemies.push(g);
 }
-document.getElementById("msg").textContent="Survive and hit all targets!";
-draw();
+for(let i=0;i<5;i++){
+ makeEnemy(Math.random()*35-17,Math.random()*35-17);
 }
-function move(dir){
-if(!playing)return;
-if(dir==="up")player.y-=18;
-if(dir==="down")player.y+=18;
-if(dir==="left")player.x-=18;
-if(dir==="right")player.x+=18;
-player.x=Math.max(15,Math.min(685,player.x));
-player.y=Math.max(15,Math.min(435,player.y));
-draw();
+
+const treeMat=new THREE.MeshStandardMaterial({color:0x174d2c});
+const trunkMat=new THREE.MeshStandardMaterial({color:0x69462c});
+for(let i=0;i<45;i++){
+ let x=Math.random()*100-50,z=Math.random()*100-50;
+ if(Math.hypot(x,z)<8)continue;
+ const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.18,.25,2),trunkMat);
+ trunk.position.set(x,1,z);scene.add(trunk);
+ const leaves=new THREE.Mesh(new THREE.ConeGeometry(1.1,3,7),treeMat);
+ leaves.position.set(x,3,z);scene.add(leaves);
 }
-function fire(){
-if(!playing)return;
-let target=targets.find(t=>t.alive);
-if(!target)return;
-bullets.push({x:player.x,y:player.y,tx:target.x,ty:target.y,life:1});
-let hit=targets.find(t=>t.alive&&Math.hypot(t.x-player.x,t.y-player.y)<230);
-if(hit){hit.alive=false;score++;}
-if(targets.every(t=>!t.alive)){
-playing=false;
-document.getElementById("msg").textContent="🏆 YOU WIN! VELOX CHAMPION!";
-}
-draw();
-}
-function draw(){
-ctx.clearRect(0,0,700,450);
-ctx.fillStyle="#426c48";ctx.fillRect(0,0,700,450);
-ctx.strokeStyle="#547b59";
-for(let i=0;i<700;i+=35){
-ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,450);ctx.stroke();
-}
-for(let i=0;i<450;i+=35){
-ctx.beginPath();ctx.moveTo(0,i);ctx.lineTo(700,i);ctx.stroke();
-}
-ctx.strokeStyle="#9deeff";ctx.lineWidth=5;
-ctx.beginPath();ctx.arc(350,225,205,0,Math.PI*2);ctx.stroke();
-ctx.lineWidth=1;
-targets.forEach(t=>{
-if(!t.alive)return;
-ctx.fillStyle="#ffb347";
-ctx.beginPath();ctx.arc(t.x,t.y,13,0,Math.PI*2);ctx.fill();
+
+let keys={},health=100,kills=0,playing=true;
+const hp=document.getElementById('hp');
+const killText=document.getElementById('kills');
+const count=document.getElementById('count');
+const message=document.getElementById('message');
+
+document.querySelectorAll('[data-m]').forEach(btn=>{
+ const m=btn.dataset.m;
+ btn.onpointerdown=e=>{e.preventDefault();keys[m]=true};
+ btn.onpointerup=btn.onpointerleave=btn.onpointercancel=()=>keys[m]=false;
 });
-ctx.fillStyle="#00d9ff";
-ctx.beginPath();ctx.arc(player.x,player.y,14,0,Math.PI*2);ctx.fill();
-ctx.fillStyle="white";ctx.fillRect(player.x-4,player.y-21,8,5);
-document.getElementById("info").textContent="❤️ Health: "+health+" | ⭐ Score: "+score;
+onkeydown=e=>keys[e.key.toLowerCase()]=true;
+onkeyup=e=>keys[e.key.toLowerCase()]=false;
+
+function shoot(){
+ if(!playing)return;
+ let best=null,dist=9;
+ const forward=new THREE.Vector3(0,0,-1).applyQuaternion(player.quaternion);
+ enemies.forEach(e=>{
+  let d=e.position.clone().sub(player.position);
+  let length=d.length();
+  if(length<dist&&forward.dot(d.normalize())>.72){best=e;dist=length;}
+ });
+ if(best){
+  scene.remove(best);
+  enemies.splice(enemies.indexOf(best),1);
+  kills++;
+  killText.textContent=kills;
+  count.textContent=enemies.length;
+  if(enemies.length===0)end('YOU WIN! CHAMPION!');
+ }
 }
-start();
+document.getElementById('fire').onpointerdown=e=>{e.preventDefault();shoot()};
+
+function end(text){
+ playing=false;message.textContent=text;
+}
+let clock=new THREE.Clock();
+function animate(){
+ requestAnimationFrame(animate);
+ let dt=Math.min(clock.getDelta(),.05);
+ if(playing){
+  let x=0,z=0;
+  if(keys.up||keys.w)z-=1;
+  if(keys.down||keys.s)z+=1;
+  if(keys.left||keys.a)x-=1;
+  if(keys.right||keys.d)x+=1;
+  if(x||z){
+   const len=Math.hypot(x,z);
+   x/=len;z/=len;
+   player.position.x+=x*7*dt;
+   player.position.z+=z*7*dt;
+   player.rotation.y=Math.atan2(-x,-z);
+  }
+  player.position.x=THREE.MathUtils.clamp(player.position.x,-65,65);
+  player.position.z=THREE.MathUtils.clamp(player.position.z,-65,65);
+  enemies.forEach(e=>{
+   let d=player.position.clone().sub(e.position);
+   let length=d.length();
+   if(length>1.4){
+    d.normalize();e.position.addScaledVector(d,1.15*dt);
+    e.rotation.y=Math.atan2(-d.x,-d.z);
+   }else{
+    health-=8*dt;hp.textContent=Math.max(0,Math.floor(health));
+   }
+  });
+  if(health<=0)end('GAME OVER!');
+ }
+ const offset=new THREE.Vector3(0,5,9).applyQuaternion(player.quaternion);
+ camera.position.lerp(player.position.clone().add(offset),.09);
+ camera.lookAt(player.position.x,player.position.y+1,player.position.z);
+ renderer.render(scene,camera);
+}
+animate();
+onresize=()=>{
+ camera.aspect=innerWidth/innerHeight;
+ camera.updateProjectionMatrix();
+ renderer.setSize(innerWidth,innerHeight);
+};
 </script>
 </body>
 </html>
