@@ -4,41 +4,48 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VELOX BATTLE 5.0</title>
+<title>VELOX BATTLE 6.0</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;overflow:hidden;background:#111;color:white;font-family:Arial}
-#hud{position:fixed;top:12px;left:12px;z-index:5;background:#000a;padding:12px;border-radius:10px}
-#healthBg{width:180px;height:15px;background:#555;border-radius:10px;overflow:hidden}
+#hud{position:fixed;top:10px;left:10px;z-index:5;background:#000c;padding:10px;border-radius:10px;font-size:14px}
+#healthBg{width:155px;height:13px;background:#555;border-radius:10px;overflow:hidden}
 #health{height:100%;width:100%;background:#19df55}
-#zoneText{color:#64c9ff;margin-top:7px}
-#controls{position:fixed;bottom:20px;left:0;right:0;z-index:6;display:flex;justify-content:space-around;align-items:center}
-button{border:2px solid white;background:#111b;color:white;border-radius:14px;padding:17px;font-size:17px;font-weight:bold;touch-action:none}
+#zoneText{color:#65caff;margin-top:5px}
+#map{position:fixed;top:10px;right:10px;width:125px;height:125px;background:#15251b;border:2px solid white;border-radius:50%;z-index:5}
+#controls{position:fixed;bottom:15px;left:0;right:0;z-index:6;display:flex;justify-content:space-around;align-items:center;flex-wrap:wrap;gap:5px}
+button{border:2px solid white;background:#111d;color:white;border-radius:12px;padding:13px;font-size:14px;font-weight:bold;touch-action:none}
 #fire{background:#a71919}
-#message{position:fixed;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;background:#000b;z-index:10;text-align:center}
-#message h1{font-size:42px}
+#sprint{background:#166e27}
+#switch{background:#174c9c}
+#message{position:fixed;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;background:#000c;z-index:10}
+#message h1{font-size:40px}
 </style>
 </head>
 <body>
-
 <div id="hud">
-  <b>VELOX BATTLE 5.0</b><br>
-  HEALTH: <span id="hp">100</span>/100
-  <div id="healthBg"><div id="health"></div></div>
-  <div id="zoneText">SAFE ZONE: 55m</div>
-  <div>ENEMIES: <span id="count">8</span></div>
+<b>VELOX BATTLE 6.0</b><br>
+HEALTH: <span id="hp">100</span>/100
+<div id="healthBg"><div id="health"></div></div>
+<div id="zoneText">SAFE ZONE: 55m</div>
+<div>ENEMIES: <span id="count">8</span></div>
+<div>GUN: <span id="gunName">PISTOL</span></div>
 </div>
 
+<canvas id="map" width="250" height="250"></canvas>
+
 <div id="controls">
-  <button id="left">LEFT</button>
-  <button id="move">MOVE</button>
-  <button id="right">RIGHT</button>
-  <button id="fire">FIRE</button>
+<button id="left">LEFT</button>
+<button id="move">MOVE</button>
+<button id="right">RIGHT</button>
+<button id="sprint">SPRINT</button>
+<button id="switch">SWITCH GUN</button>
+<button id="fire">FIRE</button>
 </div>
 
 <div id="message">
-  <h1 id="result">GAME OVER</h1>
-  <button onclick="location.reload()">PLAY AGAIN</button>
+<h1 id="result">GAME OVER</h1>
+<button onclick="location.reload()">PLAY AGAIN</button>
 </div>
 
 <script type="module">
@@ -60,10 +67,9 @@ const sun=new THREE.DirectionalLight(0xffffff,1.5);
 sun.position.set(30,60,20);
 scene.add(sun);
 
-// Ground
 const ground=new THREE.Mesh(
- new THREE.PlaneGeometry(180,180),
- new THREE.MeshStandardMaterial({color:0x548b43})
+new THREE.PlaneGeometry(180,180),
+new THREE.MeshStandardMaterial({color:0x548b43})
 );
 ground.rotation.x=-Math.PI/2;
 scene.add(ground);
@@ -71,18 +77,18 @@ scene.add(ground);
 // Player
 const player=new THREE.Group();
 const body=new THREE.Mesh(
- new THREE.BoxGeometry(1,1.6,.7),
- new THREE.MeshStandardMaterial({color:0x1677ff})
+new THREE.BoxGeometry(1,1.6,.7),
+new THREE.MeshStandardMaterial({color:0x1677ff})
 );
 body.position.y=.9;
 player.add(body);
 player.position.set(0,0,0);
 scene.add(player);
 
-// Blue safe zone
+// Safe zone
 const zone=new THREE.Mesh(
- new THREE.RingGeometry(.985,1,100),
- new THREE.MeshBasicMaterial({color:0x168dff,side:THREE.DoubleSide})
+new THREE.RingGeometry(.985,1,100),
+new THREE.MeshBasicMaterial({color:0x168dff,side:THREE.DoubleSide})
 );
 zone.rotation.x=-Math.PI/2;
 zone.position.y=.12;
@@ -92,217 +98,290 @@ let zoneRadius=55;
 let health=100;
 let gameOver=false;
 let elapsed=0;
-let move=false,left=false,right=false;
+let move=false,left=false,right=false,sprinting=false;
+let firing=false;
 let enemies=[],bullets=[],kits=[];
+let weapon=0;
+const weapons=[
+{name:'PISTOL',damage:1,delay:450,speed:1.5,color:0xffff00},
+{name:'ASSAULT RIFLE',damage:1,delay:130,speed:2.1,color:0xff9900}
+];
+let lastShot=0;
 
 function makeEnemy(x,z){
- const e=new THREE.Group();
- const mesh=new THREE.Mesh(
-  new THREE.BoxGeometry(1,1.6,.7),
-  new THREE.MeshStandardMaterial({color:0xc92727})
- );
- mesh.position.y=.9;
- e.add(mesh);
- e.position.set(x,0,z);
- scene.add(e);
- enemies.push(e);
+const e=new THREE.Group();
+const mesh=new THREE.Mesh(
+new THREE.BoxGeometry(1,1.6,.7),
+new THREE.MeshStandardMaterial({color:0xc92727})
+);
+mesh.position.y=.9;
+e.add(mesh);
+e.position.set(x,0,z);
+scene.add(e);
+enemies.push(e);
 }
 
 for(let i=0;i<8;i++){
- const a=Math.random()*Math.PI*2;
- const d=12+Math.random()*35;
- makeEnemy(Math.cos(a)*d,Math.sin(a)*d);
+const a=Math.random()*Math.PI*2;
+const d=12+Math.random()*35;
+makeEnemy(Math.cos(a)*d,Math.sin(a)*d);
 }
 
-// Health kits
 function makeKit(x,z){
- const k=new THREE.Mesh(
-  new THREE.BoxGeometry(1,1,1),
-  new THREE.MeshStandardMaterial({color:0x00ff55,emissive:0x006622})
- );
- k.position.set(x,.6,z);
- scene.add(k);
- kits.push(k);
+const k=new THREE.Mesh(
+new THREE.BoxGeometry(1,1,1),
+new THREE.MeshStandardMaterial({color:0x00ff55,emissive:0x006622})
+);
+k.position.set(x,.6,z);
+scene.add(k);
+kits.push(k);
 }
-for(let i=0;i<5;i++){
- makeKit(Math.random()*50-25,Math.random()*50-25);
-}
+for(let i=0;i<5;i++)
+makeKit(Math.random()*50-25,Math.random()*50-25);
 
 function updateHealth(){
- document.getElementById('hp').textContent=Math.max(0,Math.floor(health));
- document.getElementById('health').style.width=Math.max(0,health)+'%';
- document.getElementById('health').style.background=
- health>50?'#19df55':health>25?'orange':'red';
+document.getElementById('hp').textContent=Math.floor(health);
+document.getElementById('health').style.width=health+'%';
+document.getElementById('health').style.background=
+health>50?'#19df55':health>25?'orange':'red';
 }
 
 function finish(win){
- if(gameOver)return;
- gameOver=true;
- document.getElementById('result').textContent=win?'YOU WIN!':'GAME OVER';
- document.getElementById('message').style.display='flex';
+if(gameOver)return;
+gameOver=true;
+document.getElementById('result').textContent=win?'YOU WIN!':'GAME OVER';
+document.getElementById('message').style.display='flex';
 }
 
 function damage(amount){
- if(gameOver)return;
- health=Math.max(0,health-amount);
- updateHealth();
- if(health<=0)finish(false);
+if(gameOver)return;
+health=Math.max(0,health-amount);
+updateHealth();
+if(health<=0)finish(false);
 }
+
+// Gun switching
+function switchGun(){
+weapon=1-weapon;
+document.getElementById('gunName').textContent=weapons[weapon].name;
+}
+document.getElementById('switch').addEventListener('click',switchGun);
 
 // Shooting
 function shoot(){
- if(gameOver)return;
- const direction=new THREE.Vector3();
- camera.getWorldDirection(direction);
- direction.y=0;
- direction.normalize();
+if(gameOver)return;
+const now=performance.now();
+const w=weapons[weapon];
+if(now-lastShot<w.delay)return;
+lastShot=now;
 
- const b=new THREE.Mesh(
-  new THREE.SphereGeometry(.16,6,6),
-  new THREE.MeshBasicMaterial({color:0xffff00})
- );
- b.position.copy(player.position);
- b.position.y=1;
- b.userData.velocity=direction.multiplyScalar(1.5);
- scene.add(b);
- bullets.push(b);
+const direction=new THREE.Vector3();
+camera.getWorldDirection(direction);
+direction.y=0;
+direction.normalize();
+
+const b=new THREE.Mesh(
+new THREE.SphereGeometry(.16,6,6),
+new THREE.MeshBasicMaterial({color:w.color})
+);
+b.position.copy(player.position);
+b.position.y=1;
+b.userData.velocity=direction.multiplyScalar(w.speed);
+b.userData.damage=w.damage;
+scene.add(b);
+bullets.push(b);
 }
 
-let firing=false;
 document.getElementById('fire').addEventListener('pointerdown',e=>{
- e.preventDefault();firing=true;shoot();
+e.preventDefault();
+firing=true;
+shoot();
 });
 document.getElementById('fire').addEventListener('pointerup',()=>firing=false);
 document.getElementById('fire').addEventListener('pointerleave',()=>firing=false);
 
 function control(id,fn){
- const b=document.getElementById(id);
- b.addEventListener('pointerdown',e=>{e.preventDefault();fn(true)});
- b.addEventListener('pointerup',()=>fn(false));
- b.addEventListener('pointerleave',()=>fn(false));
+const b=document.getElementById(id);
+b.addEventListener('pointerdown',e=>{e.preventDefault();fn(true)});
+b.addEventListener('pointerup',()=>fn(false));
+b.addEventListener('pointerleave',()=>fn(false));
 }
 control('move',v=>move=v);
 control('left',v=>left=v);
 control('right',v=>right=v);
+control('sprint',v=>sprinting=v);
 
 // Camera swipe
 let lastX=null;
 renderer.domElement.addEventListener('pointerdown',e=>lastX=e.clientX);
 renderer.domElement.addEventListener('pointermove',e=>{
- if(lastX!==null){
-  player.rotation.y-=(e.clientX-lastX)*.008;
-  lastX=e.clientX;
- }
+if(lastX!==null){
+player.rotation.y-=(e.clientX-lastX)*.008;
+lastX=e.clientX;
+}
 });
 renderer.domElement.addEventListener('pointerup',()=>lastX=null);
 renderer.domElement.addEventListener('pointerleave',()=>lastX=null);
 
-// Keyboard controls
+// Keyboard
 const keys={};
-addEventListener('keydown',e=>keys[e.key.toLowerCase()]=true);
+addEventListener('keydown',e=>{
+keys[e.key.toLowerCase()]=true;
+if(e.key.toLowerCase()==='q')switchGun();
+});
 addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+
+// Mini-map
+const map=document.getElementById('map');
+const ctx=map.getContext('2d');
+
+function drawMap(){
+ctx.clearRect(0,0,250,250);
+ctx.fillStyle='#263e29';
+ctx.fillRect(0,0,250,250);
+
+const scale=1.7;
+const cx=125,cy=125;
+const zx=cx-player.position.x*scale;
+const zy=cy-player.position.z*scale;
+
+ctx.beginPath();
+ctx.arc(zx,zy,zoneRadius*scale,0,Math.PI*2);
+ctx.strokeStyle='#168dff';
+ctx.lineWidth=4;
+ctx.stroke();
+
+for(const e of enemies){
+const x=cx+(e.position.x-player.position.x)*scale;
+const y=cy+(e.position.z-player.position.z)*scale;
+ctx.fillStyle='red';
+ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fill();
+}
+
+for(const k of kits){
+const x=cx+(k.position.x-player.position.x)*scale;
+const y=cy+(k.position.z-player.position.z)*scale;
+ctx.fillStyle='#00ff55';
+ctx.fillRect(x-3,y-3,6,6);
+}
+
+ctx.fillStyle='#ffff00';
+ctx.beginPath();
+ctx.arc(cx,cy,7,0,Math.PI*2);
+ctx.fill();
+}
 
 const clock=new THREE.Clock();
 
 function animate(){
- requestAnimationFrame(animate);
- const dt=Math.min(clock.getDelta(),.05);
- if(!gameOver){
-  elapsed+=dt;
+requestAnimationFrame(animate);
+const dt=Math.min(clock.getDelta(),.05);
 
-  // Zone shrinks slowly
-  zoneRadius=Math.max(12,55-elapsed*.22);
-  zone.scale.set(zoneRadius,zoneRadius,1);
-  document.getElementById('zoneText').textContent=
-   'SAFE ZONE: '+Math.floor(zoneRadius)+'m';
+if(!gameOver){
+elapsed+=dt;
 
-  // Player movement
-  const forward=move||keys['w']||keys['arrowup'];
-  const turnLeft=left||keys['a']||keys['arrowleft'];
-  const turnRight=right||keys['d']||keys['arrowright'];
+// Zone shrinks
+zoneRadius=Math.max(12,55-elapsed*.22);
+zone.scale.set(zoneRadius,zoneRadius,1);
+document.getElementById('zoneText').textContent=
+'SAFE ZONE: '+Math.floor(zoneRadius)+'m';
 
-  if(turnLeft)player.rotation.y+=3*dt;
-  if(turnRight)player.rotation.y-=3*dt;
+// Player movement
+const forward=move||keys['w']||keys['arrowup'];
+const turnLeft=left||keys['a']||keys['arrowleft'];
+const turnRight=right||keys['d']||keys['arrowright'];
 
-  if(forward){
-   player.position.x-=Math.sin(player.rotation.y)*8*dt;
-   player.position.z-=Math.cos(player.rotation.y)*8*dt;
-  }
+if(turnLeft)player.rotation.y+=3*dt;
+if(turnRight)player.rotation.y-=3*dt;
 
-  if(keys[' '])shoot();
-  if(firing && Math.random()<.18)shoot();
-
-  player.position.x=THREE.MathUtils.clamp(player.position.x,-80,80);
-  player.position.z=THREE.MathUtils.clamp(player.position.z,-80,80);
-
-  // Zone damage
-  const distance=Math.hypot(player.position.x,player.position.z);
-  if(distance>zoneRadius)damage(8*dt);
-
-  // Enemies chase player
-  for(const e of enemies){
-   const dx=player.position.x-e.position.x;
-   const dz=player.position.z-e.position.z;
-   const d=Math.hypot(dx,dz);
-   if(d>1.5){
-    e.position.x+=dx/d*2*dt;
-    e.position.z+=dz/d*2*dt;
-   }else{
-    damage(12*dt);
-   }
-  }
-
-  // Bullets hit enemies
-  for(let i=bullets.length-1;i>=0;i--){
-   const b=bullets[i];
-   b.position.addScaledVector(b.userData.velocity,dt*60);
-   let hit=false;
-   for(let j=enemies.length-1;j>=0;j--){
-    if(b.position.distanceTo(enemies[j].position.clone().add(new THREE.Vector3(0,.8,0)))<1.2){
-     scene.remove(enemies[j]);
-     enemies.splice(j,1);
-     hit=true;
-     break;
-    }
-   }
-   if(hit||b.position.distanceTo(player.position)>100){
-    scene.remove(b);bullets.splice(i,1);
-   }
-  }
-
-  // Collect health kits
-  for(let i=kits.length-1;i>=0;i--){
-   const k=kits[i];
-   k.rotation.y+=dt*2;
-   if(player.position.distanceTo(k.position)<2){
-    health=Math.min(100,health+30);
-    updateHealth();
-    scene.remove(k);
-    kits.splice(i,1);
-   }
-  }
-
-  document.getElementById('count').textContent=enemies.length;
-  if(enemies.length===0)finish(true);
-
-  // Camera follows player
-  const behind=new THREE.Vector3(
-   Math.sin(player.rotation.y)*8,
-   5,
-   Math.cos(player.rotation.y)*8
-  );
-  camera.position.copy(player.position).add(behind);
-  camera.lookAt(player.position.x,1.5,player.position.z);
- }
- renderer.render(scene,camera);
+if(forward){
+const speed=(sprinting||keys['shift'])?13:8;
+player.position.x-=Math.sin(player.rotation.y)*speed*dt;
+player.position.z-=Math.cos(player.rotation.y)*speed*dt;
 }
+
+if(keys[' '])shoot();
+if(firing)shoot();
+
+player.position.x=THREE.MathUtils.clamp(player.position.x,-80,80);
+player.position.z=THREE.MathUtils.clamp(player.position.z,-80,80);
+
+// Zone damage
+const distance=Math.hypot(player.position.x,player.position.z);
+if(distance>zoneRadius)damage(8*dt);
+
+// Enemies chase
+for(const e of enemies){
+const dx=player.position.x-e.position.x;
+const dz=player.position.z-e.position.z;
+const d=Math.hypot(dx,dz);
+if(d>1.5){
+e.position.x+=dx/d*2*dt;
+e.position.z+=dz/d*2*dt;
+}else{
+damage(12*dt);
+}
+}
+
+// Bullets
+for(let i=bullets.length-1;i>=0;i--){
+const b=bullets[i];
+b.position.addScaledVector(b.userData.velocity,dt*60);
+let hit=false;
+
+for(let j=enemies.length-1;j>=0;j--){
+const target=enemies[j].position.clone().add(new THREE.Vector3(0,.8,0));
+if(b.position.distanceTo(target)<1.2){
+scene.remove(enemies[j]);
+enemies.splice(j,1);
+hit=true;
+break;
+}
+}
+
+if(hit||b.position.distanceTo(player.position)>100){
+scene.remove(b);
+bullets.splice(i,1);
+}
+}
+
+// Health kits
+for(let i=kits.length-1;i>=0;i--){
+const k=kits[i];
+k.rotation.y+=dt*2;
+if(player.position.distanceTo(k.position)<2){
+health=Math.min(100,health+30);
+updateHealth();
+scene.remove(k);
+kits.splice(i,1);
+}
+}
+
+document.getElementById('count').textContent=enemies.length;
+if(enemies.length===0)finish(true);
+
+// Camera
+const behind=new THREE.Vector3(
+Math.sin(player.rotation.y)*8,
+5,
+Math.cos(player.rotation.y)*8
+);
+camera.position.copy(player.position).add(behind);
+camera.lookAt(player.position.x,1.5,player.position.z);
+
+drawMap();
+}
+
+renderer.render(scene,camera);
+}
+
 updateHealth();
 animate();
 
 addEventListener('resize',()=>{
- camera.aspect=innerWidth/innerHeight;
- camera.updateProjectionMatrix();
- renderer.setSize(innerWidth,innerHeight);
+camera.aspect=innerWidth/innerHeight;
+camera.updateProjectionMatrix();
+renderer.setSize(innerWidth,innerHeight);
 });
 </script>
 </body>
