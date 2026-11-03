@@ -1,528 +1,343 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>VELOX BATTLE 8.0</title>
-<style>
-*{box-sizing:border-box}
-body{margin:0;overflow:hidden;background:#111;color:white;font-family:Arial}
-#hud{position:fixed;top:8px;left:8px;background:#000d;padding:10px;border-radius:10px;z-index:5;font-size:13px}
-#healthBg{width:145px;height:12px;background:#555;border-radius:8px;overflow:hidden}
-#health{height:100%;width:100%;background:#19df55}
-#map{position:fixed;top:8px;right:8px;width:120px;height:120px;border:2px solid white;border-radius:50%;z-index:5}
-#controls{position:fixed;bottom:12px;left:0;right:0;display:flex;justify-content:space-around;flex-wrap:wrap;gap:5px;z-index:6}
-button{background:#111e;color:white;border:2px solid white;border-radius:12px;padding:12px;font-weight:bold;touch-action:none}
-#fire{background:#a71919}
-#message{display:none;position:fixed;inset:0;background:#000d;z-index:10;align-items:center;justify-content:center;flex-direction:column}
-#message h1{font-size:40px}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Velox Battle - PUBG Style 3D Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background-color: #87CEEB;
+            font-family: Arial, sans-serif;
+        }
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            z-index: 10;
+            min-width: 180px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .title {
+            font-weight: bold;
+            font-size: 15px;
+            color: #FFD700;
+            margin-bottom: 5px;
+        }
+        .health-bar {
+            width: 100%;
+            height: 12px;
+            background: #444;
+            border-radius: 6px;
+            overflow: hidden;
+            margin: 5px 0;
+        }
+        #health-fill {
+            width: 100%;
+            height: 100%;
+            background: #00FF66;
+            transition: width 0.2s;
+        }
+        #minimap-container {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 110px;
+            height: 110px;
+            border-radius: 50%;
+            border: 3px solid #10B981;
+            background: rgba(16, 185, 129, 0.3);
+            overflow: hidden;
+            z-index: 10;
+        }
+        #minimap {
+            width: 100%;
+            height: 100%;
+        }
+        #controls {
+            position: absolute;
+            bottom: 15px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+            padding: 0 10px;
+        }
+        .btn-row {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            width: 100%;
+            max-width: 400px;
+        }
+        .btn {
+            background: rgba(0, 0, 0, 0.75);
+            color: white;
+            border: 1px solid #ffffff55;
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 12px;
+            flex: 1;
+            text-align: center;
+            touch-action: manipulation;
+        }
+        .btn:active {
+            background: rgba(255, 255, 255, 0.4);
+        }
+        .btn-fire {
+            background: rgba(220, 38, 38, 0.85);
+            border-color: #ef4444;
+        }
+        .btn-gun {
+            background: rgba(37, 99, 235, 0.85);
+            border-color: #3b82f6;
+        }
+        #hit-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 0, 0, 0.3);
+            display: none;
+            pointer-events: none;
+            z-index: 5;
+        }
+    </style>
+    <!-- Three.js 3D Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
-<div id="hud">
-<b>VELOX BATTLE 8.0</b><br>
-HEALTH: <span id="hp">100</span>/100
-<div id="healthBg"><div id="health"></div></div>
-<div id="zoneText">ZONE: 55m</div>
-<div>ENEMIES: <span id="count">8</span></div>
-<div>GUN: <span id="gun">PISTOL</span></div>
-<div id="status">Outside</div>
-</div>
-
-<canvas id="map" width="240" height="240"></canvas>
-
-<div id="controls">
-<button id="left">LEFT</button>
-<button id="move">MOVE</button>
-<button id="right">RIGHT</button>
-<button id="sprint">SPRINT</button>
-<button id="switch">CHANGE GUN</button>
-<button id="fire">FIRE</button>
-</div>
-
-<div id="message">
-<h1 id="result">GAME OVER</h1>
-<button onclick="location.reload()">PLAY AGAIN</button>
-</div>
-
-<script type="module">
-import * as THREE from
-'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
-
-const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x83c9ed);
-scene.fog=new THREE.Fog(0x83c9ed,100,190);
-
-const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,.1,300);
-const renderer=new THREE.WebGLRenderer({antialias:false});
-renderer.setSize(innerWidth,innerHeight);
-renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
-document.body.appendChild(renderer.domElement);
-
-scene.add(new THREE.HemisphereLight(0xffffff,0x526b39,2));
-const sun=new THREE.DirectionalLight(0xffffff,1.5);
-sun.position.set(30,60,20);
-scene.add(sun);
-
-// Ground
-const ground=new THREE.Mesh(
-new THREE.PlaneGeometry(180,180),
-new THREE.MeshStandardMaterial({color:0x548b43})
-);
-ground.rotation.x=-Math.PI/2;
-scene.add(ground);
-
-// Player
-const player=new THREE.Group();
-const body=new THREE.Mesh(
-new THREE.BoxGeometry(1,1.6,.7),
-new THREE.MeshStandardMaterial({color:0x1677ff})
-);
-body.position.y=.9;
-player.add(body);
-scene.add(player);
-
-// Buildings with door openings
-const buildings=[];
-const wallMaterial=new THREE.MeshStandardMaterial({color:0xc7b18c});
-const roofMaterial=new THREE.MeshStandardMaterial({color:0x8d3434});
-const doorMaterial=new THREE.MeshStandardMaterial({color:0x54321e});
-const windowMaterial=new THREE.MeshStandardMaterial({color:0x62d9ff});
-
-function wall(group,x,y,z,w,h,d,material){
-const mesh=new THREE.Mesh(
-new THREE.BoxGeometry(w,h,d),material
-);
-mesh.position.set(x,y,z);
-group.add(mesh);
-return mesh;
-}
-
-function makeBuilding(x,z,w,d,h){
-const g=new THREE.Group();
-
-// Back wall
-wall(g,0,h/2,-d/2,w,h,.35,wallMaterial);
-
-// Left and right walls
-wall(g,-w/2,h/2,0,.35,h,d,wallMaterial);
-wall(g,w/2,h/2,0,.35,h,d,wallMaterial);
-
-// Front wall with door gap
-const sideWidth=(w-2.2)/2;
-wall(g,-(sideWidth/2+1.1),h/2,d/2,sideWidth,h,.35,wallMaterial);
-wall(g,(sideWidth/2+1.1),h/2,d/2,sideWidth,h,.35,wallMaterial);
-wall(g,0,h-.35,d/2,2.2,.7,.35,wallMaterial);
-
-// Roof
-wall(g,0,h+.2,0,w+.5,.4,d+.5,roofMaterial);
-
-// Door panel beside the opening
-const door=wall(g,1.1,1,d/2+.08,.12,2,.12,doorMaterial);
-door.userData.isDoor=true;
-
-// Windows on side walls
-wall(g,-w/2-.02,h*.65,0,.08,1.2,1.4,windowMaterial);
-wall(g,w/2+.02,h*.65,0,.08,1.2,1.4,windowMaterial);
-
-g.position.set(x,0,z);
-scene.add(g);
-
-// Building collision boundary
-buildings.push({
-x,z,w,d,h,doorOpen:false,door
-});
-}
-
-makeBuilding(15,-18,10,9,7);
-makeBuilding(-18,-22,12,10,8);
-makeBuilding(25,18,9,8,6);
-makeBuilding(-25,20,13,11,9);
-makeBuilding(0,-38,15,12,10);
-makeBuilding(40,-5,10,10,7);
-makeBuilding(-42,-8,11,9,8);
-makeBuilding(5,35,12,10,7);
-
-// Trees
-for(let i=0;i<15;i++){
-const x=Math.random()*130-65;
-const z=Math.random()*130-65;
-const trunk=new THREE.Mesh(
-new THREE.CylinderGeometry(.3,.4,2,6),
-new THREE.MeshStandardMaterial({color:0x694322})
-);
-trunk.position.set(x,1,z);
-scene.add(trunk);
-
-const leaves=new THREE.Mesh(
-new THREE.ConeGeometry(2,5,6),
-new THREE.MeshStandardMaterial({color:0x17632b})
-);
-leaves.position.set(x,4,z);
-scene.add(leaves);
-}
-
-// Safe zone
-const zone=new THREE.Mesh(
-new THREE.RingGeometry(.985,1,100),
-new THREE.MeshBasicMaterial({color:0x168dff,side:THREE.DoubleSide})
-);
-zone.rotation.x=-Math.PI/2;
-zone.position.y=.12;
-scene.add(zone);
-
-let zoneRadius=55,health=100,elapsed=0,gameOver=false;
-let enemies=[],bullets=[],kits=[];
-let move=false,left=false,right=false,sprinting=false,firing=false;
-let weapon=0,lastShot=0;
-let insideBuilding=false;
-
-const guns=[
-{name:'PISTOL',delay:450,speed:1.5,color:0xffff00},
-{name:'ASSAULT RIFLE',delay:150,speed:2,color:0xff9900},
-{name:'SNIPER RIFLE',delay:800,speed:3,color:0x00ffff}
-];
-
-function makeEnemy(x,z){
-const e=new THREE.Group();
-const mesh=new THREE.Mesh(
-new THREE.BoxGeometry(1,1.6,.7),
-new THREE.MeshStandardMaterial({color:0xc92727})
-);
-mesh.position.y=.9;
-e.add(mesh);
-e.position.set(x,0,z);
-scene.add(e);
-enemies.push(e);
-}
-
-for(let i=0;i<8;i++){
-const a=Math.random()*Math.PI*2;
-const d=15+Math.random()*35;
-makeEnemy(Math.cos(a)*d,Math.sin(a)*d);
-}
-
-function makeKit(x,z){
-const k=new THREE.Mesh(
-new THREE.BoxGeometry(1,1,1),
-new THREE.MeshStandardMaterial({color:0x00ff55,emissive:0x006622})
-);
-k.position.set(x,.6,z);
-scene.add(k);
-kits.push(k);
-}
-for(let i=0;i<5;i++)
-makeKit(Math.random()*50-25,Math.random()*50-25);
-
-function updateHealth(){
-document.getElementById('hp').textContent=Math.floor(health);
-document.getElementById('health').style.width=health+'%';
-document.getElementById('health').style.background=
-health>50?'#19df55':health>25?'orange':'red';
-}
-
-function finish(win){
-if(gameOver)return;
-gameOver=true;
-document.getElementById('result').textContent=win?'YOU WIN!':'GAME OVER';
-document.getElementById('message').style.display='flex';
-}
-
-function damage(n){
-if(gameOver)return;
-health=Math.max(0,health-n);
-updateHealth();
-if(health<=0)finish(false);
-}
-
-// Door opening and closing
-function doorControl(){
-let nearest=null,best=999;
-for(const b of buildings){
-const d=Math.hypot(player.position.x-b.x,player.position.z-b.z);
-if(d<best){best=d;nearest=b;}
-}
-if(nearest && best<7){
-if(!nearest.doorOpen){
-nearest.door.rotation.y=Math.PI/2;
-nearest.doorOpen=true;
-}
-}else{
-for(const b of buildings){
-if(b.doorOpen){
-b.door.rotation.y=0;
-b.doorOpen=false;
-}
-}
-}
-}
-
-// Building collision
-function blocked(x,z){
-for(const b of buildings){
-const dx=Math.abs(x-b.x);
-const dz=Math.abs(z-b.z);
-if(dx<b.w/2+.6 && dz<b.d/2+.6){
-const inDoor=dz>b.d/2-.9 && dx<1.8;
-if(!inDoor)return true;
-}
-}
-return false;
-}
-
-// Gun switching
-function switchGun(){
-weapon=(weapon+1)%guns.length;
-document.getElementById('gun').textContent=guns[weapon].name;
-}
-document.getElementById('switch').onclick=switchGun;
-
-// Shooting
-function shoot(){
-if(gameOver)return;
-const now=performance.now(),w=guns[weapon];
-if(now-lastShot<w.delay)return;
-lastShot=now;
-
-const dir=new THREE.Vector3();
-camera.getWorldDirection(dir);
-dir.y=0;
-dir.normalize();
-
-const origin=player.position.clone();
-origin.y=1;
-const b=new THREE.Mesh(
-new THREE.SphereGeometry(.16,6,6),
-new THREE.MeshBasicMaterial({color:w.color})
-);
-b.position.copy(origin);
-b.userData.velocity=dir.multiplyScalar(w.speed);
-scene.add(b);
-bullets.push(b);
-}
-
-document.getElementById('fire').onpointerdown=e=>{
-e.preventDefault();firing=true;shoot();
-};
-document.getElementById('fire').onpointerup=()=>firing=false;
-document.getElementById('fire').onpointerleave=()=>firing=false;
-
-function control(id,fn){
-const b=document.getElementById(id);
-b.onpointerdown=e=>{e.preventDefault();fn(true)};
-b.onpointerup=()=>fn(false);
-b.onpointerleave=()=>fn(false);
-}
-control('move',v=>move=v);
-control('left',v=>left=v);
-control('right',v=>right=v);
-control('sprint',v=>sprinting=v);
-
-// Camera swipe
-let lastX=null;
-renderer.domElement.onpointerdown=e=>lastX=e.clientX;
-renderer.domElement.onpointermove=e=>{
-if(lastX!==null){
-player.rotation.y-=(e.clientX-lastX)*.008;
-lastX=e.clientX;
-}
-};
-renderer.domElement.onpointerup=()=>lastX=null;
-renderer.domElement.onpointerleave=()=>lastX=null;
-
-// Keyboard
-const keys={};
-addEventListener('keydown',e=>{
-keys[e.key.toLowerCase()]=true;
-if(e.key.toLowerCase()==='q')switchGun();
-if(e.key.toLowerCase()==='e')doorControl();
-});
-addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
-
-// Mini-map
-const map=document.getElementById('map');
-const ctx=map.getContext('2d');
-
-function drawMap(){
-ctx.clearRect(0,0,240,240);
-ctx.fillStyle='#263e29';
-ctx.fillRect(0,0,240,240);
-const scale=1.7,cx=120,cy=120;
-
-for(const b of buildings){
-const x=cx+(b.x-player.position.x)*scale;
-const y=cy+(b.z-player.position.z)*scale;
-ctx.fillStyle='#c7b18c';
-ctx.fillRect(x-b.w*scale/2,y-b.d*scale/2,
-b.w*scale,b.d*scale);
-}
-
-ctx.beginPath();
-ctx.arc(cx-player.position.x*scale,
-cy-player.position.z*scale,zoneRadius*scale,0,Math.PI*2);
-ctx.strokeStyle='#168dff';
-ctx.lineWidth=4;
-ctx.stroke();
-
-for(const e of enemies){
-const x=cx+(e.position.x-player.position.x)*scale;
-const y=cy+(e.position.z-player.position.z)*scale;
-ctx.fillStyle='red';
-ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fill();
-}
-
-for(const k of kits){
-const x=cx+(k.position.x-player.position.x)*scale;
-const y=cy+(k.position.z-player.position.z)*scale;
-ctx.fillStyle='#00ff55';
-ctx.fillRect(x-3,y-3,6,6);
-}
-
-ctx.fillStyle='yellow';
-ctx.beginPath();ctx.arc(cx,cy,7,0,Math.PI*2);ctx.fill();
-}
-
-const clock=new THREE.Clock();
-
-function animate(){
-requestAnimationFrame(animate);
-const dt=Math.min(clock.getDelta(),.05);
-
-if(!gameOver){
-elapsed+=dt;
-zoneRadius=Math.max(12,55-elapsed*.22);
-zone.scale.set(zoneRadius,zoneRadius,1);
-document.getElementById('zoneText').textContent='ZONE: '+Math.floor(zoneRadius)+'m';
-
-const forward=move||keys['w']||keys['arrowup'];
-if(left||keys['a'])player.rotation.y+=3*dt;
-if(right||keys['d'])player.rotation.y-=3*dt;
-
-if(forward){
-const speed=(sprinting||keys['shift'])?13:8;
-const nx=player.position.x-Math.sin(player.rotation.y)*speed*dt;
-const nz=player.position.z-Math.cos(player.rotation.y)*speed*dt;
-if(!blocked(nx,nz)){
-player.position.x=nx;
-player.position.z=nz;
-}
-}
-
-if(keys[' '])shoot();
-if(firing)shoot();
-
-player.position.x=THREE.MathUtils.clamp(player.position.x,-80,80);
-player.position.z=THREE.MathUtils.clamp(player.position.z,-80,80);
-
-// Detect inside building
-insideBuilding=false;
-for(const b of buildings){
-if(Math.abs(player.position.x-b.x)<b.w/2 &&
-Math.abs(player.position.z-b.z)<b.d/2){
-insideBuilding=true;
-break;
-}
-}
-document.getElementById('status').textContent=
-insideBuilding?'Inside building':'Outside';
-
-// Zone damage
-if(Math.hypot(player.position.x,player.position.z)>zoneRadius)
-damage(8*dt);
-
-// Enemies
-for(const e of enemies){
-const dx=player.position.x-e.position.x;
-const dz=player.position.z-e.position.z;
-const d=Math.hypot(dx,dz);
-if(d>1.5){
-const nx=e.position.x+dx/d*2*dt;
-const nz=e.position.z+dz/d*2*dt;
-let blockedEnemy=false;
-for(const b of buildings){
-if(Math.abs(nx-b.x)<b.w/2 &&
-Math.abs(nz-b.z)<b.d/2)blockedEnemy=true;
-}
-if(!blockedEnemy){
-e.position.x=nx;
-e.position.z=nz;
-}
-}else damage(12*dt);
-}
-
-// Bullets and wall collision
-for(let i=bullets.length-1;i>=0;i--){
-const b=bullets[i];
-b.position.addScaledVector(b.userData.velocity,dt*60);
-let hit=false;
-
-// Check building walls
-for(const house of buildings){
-if(Math.abs(b.position.x-house.x)<house.w/2 &&
-Math.abs(b.position.z-house.z)<house.d/2 &&
-b.position.y<house.h){
-hit=true;
-break;
-}
-}
-
-// Check enemies
-if(!hit){
-for(let j=enemies.length-1;j>=0;j--){
-const target=enemies[j].position.clone().add(new THREE.Vector3(0,.8,0));
-if(b.position.distanceTo(target)<1.2){
-scene.remove(enemies[j]);
-enemies.splice(j,1);
-hit=true;
-break;
-}
-}
-}
-
-if(hit||b.position.distanceTo(player.position)>100){
-scene.remove(b);
-bullets.splice(i,1);
-}
-}
-
-// Health kits
-for(let i=kits.length-1;i>=0;i--){
-const k=kits[i];
-k.rotation.y+=dt*2;
-if(player.position.distanceTo(k.position)<2){
-health=Math.min(100,health+30);
-updateHealth();
-scene.remove(k);
-kits.splice(i,1);
-}
-}
-
-document.getElementById('count').textContent=enemies.length;
-if(enemies.length===0)finish(true);
-
-// Camera
-const behind=new THREE.Vector3(
-Math.sin(player.rotation.y)*8,5,
-Math.cos(player.rotation.y)*8
-);
-camera.position.copy(player.position).add(behind);
-camera.lookAt(player.position.x,1.5,player.position.z);
-
-drawMap();
-}
-renderer.render(scene,camera);
-}
-
-updateHealth();
-animate();
-
-addEventListener('resize',()=>{
-camera.aspect=innerWidth/innerHeight;
-camera.updateProjectionMatrix();
-renderer.setSize(innerWidth,innerHeight);
-});
-</script>
+    <div id="hit-overlay"></div>
+
+    <div id="hud">
+        <div class="title">VELOX BATTLE 8.0 (PUBG MOD)</div>
+        <div>HEALTH: <span id="hp-text">100</span>/100</div>
+        <div class="health-bar"><div id="health-fill"></div></div>
+        <div>ZONE: <span id="zone-dist">50m</span></div>
+        <div>ENEMIES: <span id="enemies-left">8</span></div>
+        <div>GUN: <span id="gun-type">PISTOL</span></div>
+        <div>STATUS: <span id="zone-status" style="color:#00FF66;">SAFE</span></div>
+    </div>
+
+    <div id="minimap-container">
+        <canvas id="minimap"></canvas>
+    </div>
+
+    <div id="controls">
+        <div class="btn-row">
+            <div class="btn" id="btn-left">LEFT</div>
+            <div class="btn" id="btn-move">MOVE</div>
+            <div class="btn" id="btn-right">RIGHT</div>
+            <div class="btn" id="btn-sprint">SPRINT</div>
+        </div>
+        <div class="btn-row">
+            <div class="btn btn-gun" id="btn-change-gun">CHANGE GUN</div>
+            <div class="btn btn-fire" id="btn-fire">FIRE</div>
+        </div>
+    </div>
+
+    <script>
+        // Game State Variables
+        let health = 100;
+        let enemiesCount = 8;
+        let currentGun = 'PISTOL';
+        let speed = 0.15;
+        let isSprinting = false;
+
+        // Scene Setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB);
+        scene.fog = new THREE.FogExp2(0x87CEEB, 0.015);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting
+        const light = new THREE.DirectionalLight(0xffffff, 1);
+        light.position.set(20, 40, 20);
+        scene.add(light);
+        scene.add(new THREE.AmbientLight(0x666666));
+
+        // Ground
+        const groundGeo = new THREE.PlaneGeometry(300, 300);
+        const groundMat = new THREE.MeshBasicMaterial({ color: 0x4B7A47 });
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        scene.add(ground);
+
+        // Player Box
+        const playerGeo = new THREE.BoxGeometry(1.2, 2.5, 1.2);
+        const playerMat = new THREE.MeshBasicMaterial({ color: 0x2563EB });
+        const player = new THREE.Mesh(playerGeo, playerMat);
+        player.position.set(0, 1.25, 0);
+        scene.add(player);
+
+        // Buildings / Cover Walls
+        const wallMat = new THREE.MeshBasicMaterial({ color: 0xA88B68 });
+        function createBuilding(x, z, w, h, d) {
+            const bGeo = new THREE.BoxGeometry(w, h, d);
+            const b = new THREE.Mesh(bGeo, wallMat);
+            b.position.set(x, h/2, z);
+            scene.add(b);
+        }
+        createBuilding(-15, -20, 12, 8, 12);
+        createBuilding(18, -30, 10, 6, 10);
+        createBuilding(0, -45, 15, 10, 15);
+
+        // Enemies Creation
+        const enemies = [];
+        const enemyGeo = new THREE.BoxGeometry(1.2, 2.5, 1.2);
+        const enemyMat = new THREE.MeshBasicMaterial({ color: 0xDC2626 });
+
+        for(let i=0; i<enemiesCount; i++) {
+            const e = new THREE.Mesh(enemyGeo, enemyMat);
+            e.position.set(
+                (Math.random() - 0.5) * 120,
+                1.25,
+                -10 - Math.random() * 90
+            );
+            scene.add(e);
+            enemies.push(e);
+        }
+
+        // Camera Follow
+        camera.position.set(0, 5, 8);
+
+        function updateCamera() {
+            camera.position.x = player.position.x + Math.sin(player.rotation.y) * 7;
+            camera.position.z = player.position.z + Math.cos(player.rotation.y) * 7;
+            camera.position.y = player.position.y + 4;
+            camera.lookAt(player.position.x, player.position.y + 1, player.position.z);
+        }
+
+        // Control Listeners
+        let moveForward = false;
+        let turnLeft = false;
+        let turnRight = false;
+
+        function bindBtn(id, onPress, onRelease) {
+            const el = document.getElementById(id);
+            el.addEventListener('touchstart', (e) => { e.preventDefault(); onPress(); });
+            el.addEventListener('touchend', (e) => { e.preventDefault(); onRelease(); });
+            el.addEventListener('mousedown', onPress);
+            el.addEventListener('mouseup', onRelease);
+        }
+
+        bindBtn('btn-move', () => moveForward = true, () => moveForward = false);
+        bindBtn('btn-left', () => turnLeft = true, () => turnLeft = false);
+        bindBtn('btn-right', () => turnRight = true, () => turnRight = false);
+
+        bindBtn('btn-sprint', () => {
+            isSprinting = !isSprinting;
+            document.getElementById('btn-sprint').style.background = isSprinting ? '#10B981' : 'rgba(0,0,0,0.75)';
+        }, ()=>{});
+
+        bindBtn('btn-change-gun', () => {
+            currentGun = (currentGun === 'PISTOL') ? 'AK47' : 'PISTOL';
+            document.getElementById('gun-type').innerText = currentGun;
+        }, ()=>{});
+
+        bindBtn('btn-fire', shoot, ()=>{});
+
+        // Shooting Logic
+        function shoot() {
+            const raycaster = new THREE.Raycaster();
+            const dir = new THREE.Vector3(
+                -Math.sin(player.rotation.y),
+                0,
+                -Math.cos(player.rotation.y)
+            );
+            raycaster.set(player.position, dir);
+
+            const intersects = raycaster.intersectObjects(enemies);
+            if(intersects.length > 0 && intersects[0].distance < 35) {
+                const hitEnemy = intersects[0].object;
+                scene.remove(hitEnemy);
+                const index = enemies.indexOf(hitEnemy);
+                if (index > -1) enemies.splice(index, 1);
+                
+                enemiesCount--;
+                document.getElementById('enemies-left').innerText = enemiesCount;
+            }
+        }
+
+        // Minimap Render
+        const mapCanvas = document.getElementById('minimap');
+        const mapCtx = mapCanvas.getContext('2d');
+        mapCanvas.width = 110;
+        mapCanvas.height = 110;
+
+        function drawMinimap() {
+            mapCtx.clearRect(0, 0, 110, 110);
+            
+            // Player Dot
+            mapCtx.fillStyle = '#FFD700';
+            mapCtx.beginPath();
+            mapCtx.arc(55, 55, 4, 0, Math.PI * 2);
+            mapCtx.fill();
+
+            // Enemy Dots
+            mapCtx.fillStyle = '#DC2626';
+            enemies.forEach(e => {
+                const dx = (e.position.x - player.position.x) * 0.8;
+                const dz = (e.position.z - player.position.z) * 0.8;
+                if(Math.abs(dx) < 50 && Math.abs(dz) < 50) {
+                    mapCtx.beginPath();
+                    mapCtx.arc(55 + dx, 55 + dz, 3, 0, Math.PI * 2);
+                    mapCtx.fill();
+                }
+            });
+        }
+
+        // Main Game Loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const currSpeed = isSprinting ? speed * 1.8 : speed;
+
+            if (turnLeft) player.rotation.y += 0.04;
+            if (turnRight) player.rotation.y -= 0.04;
+
+            if (moveForward) {
+                player.position.x -= Math.sin(player.rotation.y) * currSpeed;
+                player.position.z -= Math.cos(player.rotation.y) * currSpeed;
+            }
+
+            updateCamera();
+            drawMinimap();
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
 </body>
 </html>
