@@ -4,29 +4,31 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>VELOX BATTLE 7.0</title>
+<title>VELOX BATTLE 8.0</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;overflow:hidden;background:#111;color:white;font-family:Arial}
-#hud{position:fixed;top:8px;left:8px;background:#000c;padding:10px;border-radius:10px;z-index:5;font-size:13px}
+#hud{position:fixed;top:8px;left:8px;background:#000d;padding:10px;border-radius:10px;z-index:5;font-size:13px}
 #healthBg{width:145px;height:12px;background:#555;border-radius:8px;overflow:hidden}
 #health{height:100%;width:100%;background:#19df55}
 #map{position:fixed;top:8px;right:8px;width:120px;height:120px;border:2px solid white;border-radius:50%;z-index:5}
 #controls{position:fixed;bottom:12px;left:0;right:0;display:flex;justify-content:space-around;flex-wrap:wrap;gap:5px;z-index:6}
-button{background:#111d;color:white;border:2px solid white;border-radius:12px;padding:12px;font-weight:bold;touch-action:none}
+button{background:#111e;color:white;border:2px solid white;border-radius:12px;padding:12px;font-weight:bold;touch-action:none}
 #fire{background:#a71919}
 #message{display:none;position:fixed;inset:0;background:#000d;z-index:10;align-items:center;justify-content:center;flex-direction:column}
+#message h1{font-size:40px}
 </style>
 </head>
 <body>
 
 <div id="hud">
-<b>VELOX BATTLE 7.0</b><br>
+<b>VELOX BATTLE 8.0</b><br>
 HEALTH: <span id="hp">100</span>/100
 <div id="healthBg"><div id="health"></div></div>
 <div id="zoneText">ZONE: 55m</div>
 <div>ENEMIES: <span id="count">8</span></div>
 <div>GUN: <span id="gun">PISTOL</span></div>
+<div id="status">Outside</div>
 </div>
 
 <canvas id="map" width="240" height="240"></canvas>
@@ -82,58 +84,66 @@ body.position.y=.9;
 player.add(body);
 scene.add(player);
 
-// Buildings and houses
+// Buildings with door openings
 const buildings=[];
-function makeBuilding(x,z,w,h,d,color){
-const house=new THREE.Group();
+const wallMaterial=new THREE.MeshStandardMaterial({color:0xc7b18c});
+const roofMaterial=new THREE.MeshStandardMaterial({color:0x8d3434});
+const doorMaterial=new THREE.MeshStandardMaterial({color:0x54321e});
+const windowMaterial=new THREE.MeshStandardMaterial({color:0x62d9ff});
 
-const wall=new THREE.Mesh(
-new THREE.BoxGeometry(w,h,d),
-new THREE.MeshStandardMaterial({color})
+function wall(group,x,y,z,w,h,d,material){
+const mesh=new THREE.Mesh(
+new THREE.BoxGeometry(w,h,d),material
 );
-wall.position.y=h/2;
-house.add(wall);
+mesh.position.set(x,y,z);
+group.add(mesh);
+return mesh;
+}
+
+function makeBuilding(x,z,w,d,h){
+const g=new THREE.Group();
+
+// Back wall
+wall(g,0,h/2,-d/2,w,h,.35,wallMaterial);
+
+// Left and right walls
+wall(g,-w/2,h/2,0,.35,h,d,wallMaterial);
+wall(g,w/2,h/2,0,.35,h,d,wallMaterial);
+
+// Front wall with door gap
+const sideWidth=(w-2.2)/2;
+wall(g,-(sideWidth/2+1.1),h/2,d/2,sideWidth,h,.35,wallMaterial);
+wall(g,(sideWidth/2+1.1),h/2,d/2,sideWidth,h,.35,wallMaterial);
+wall(g,0,h-.35,d/2,2.2,.7,.35,wallMaterial);
 
 // Roof
-const roof=new THREE.Mesh(
-new THREE.ConeGeometry(Math.max(w,d)*.75,2,4),
-new THREE.MeshStandardMaterial({color:0x8d3434})
-);
-roof.position.y=h+1;
-roof.rotation.y=Math.PI/4;
-house.add(roof);
+wall(g,0,h+.2,0,w+.5,.4,d+.5,roofMaterial);
 
-// Door
-const door=new THREE.Mesh(
-new THREE.BoxGeometry(.9,1.8,.12),
-new THREE.MeshStandardMaterial({color:0x54321e})
-);
-door.position.set(0,.9,d/2+.07);
-house.add(door);
+// Door panel beside the opening
+const door=wall(g,1.1,1,d/2+.08,.12,2,.12,doorMaterial);
+door.userData.isDoor=true;
 
-// Windows
-for(const side of [-1,1]){
-const windowMesh=new THREE.Mesh(
-new THREE.BoxGeometry(1,1,.1),
-new THREE.MeshStandardMaterial({color:0x66dfff,emissive:0x123344})
-);
-windowMesh.position.set(side*w*.28,h*.65,d/2+.08);
-house.add(windowMesh);
+// Windows on side walls
+wall(g,-w/2-.02,h*.65,0,.08,1.2,1.4,windowMaterial);
+wall(g,w/2+.02,h*.65,0,.08,1.2,1.4,windowMaterial);
+
+g.position.set(x,0,z);
+scene.add(g);
+
+// Building collision boundary
+buildings.push({
+x,z,w,d,h,doorOpen:false,door
+});
 }
 
-house.position.set(x,0,z);
-scene.add(house);
-buildings.push({x,z,w,d});
-}
-
-makeBuilding(15,-18,10,7,9,0xd6bd91);
-makeBuilding(-18,-22,12,8,10,0xc8c8c8);
-makeBuilding(25,18,9,6,8,0xd4aa73);
-makeBuilding(-25,20,13,9,11,0xaaaabb);
-makeBuilding(0,-38,15,10,12,0xd8d1b7);
-makeBuilding(40,-5,10,7,10,0xb6aa92);
-makeBuilding(-42,-8,11,8,9,0xc9a68b);
-makeBuilding(5,35,12,7,10,0xb9c8b0);
+makeBuilding(15,-18,10,9,7);
+makeBuilding(-18,-22,12,10,8);
+makeBuilding(25,18,9,8,6);
+makeBuilding(-25,20,13,11,9);
+makeBuilding(0,-38,15,12,10);
+makeBuilding(40,-5,10,10,7);
+makeBuilding(-42,-8,11,9,8);
+makeBuilding(5,35,12,10,7);
 
 // Trees
 for(let i=0;i<15;i++){
@@ -145,6 +155,7 @@ new THREE.MeshStandardMaterial({color:0x694322})
 );
 trunk.position.set(x,1,z);
 scene.add(trunk);
+
 const leaves=new THREE.Mesh(
 new THREE.ConeGeometry(2,5,6),
 new THREE.MeshStandardMaterial({color:0x17632b})
@@ -166,6 +177,7 @@ let zoneRadius=55,health=100,elapsed=0,gameOver=false;
 let enemies=[],bullets=[],kits=[];
 let move=false,left=false,right=false,sprinting=false,firing=false;
 let weapon=0,lastShot=0;
+let insideBuilding=false;
 
 const guns=[
 {name:'PISTOL',delay:450,speed:1.5,color:0xffff00},
@@ -217,6 +229,7 @@ gameOver=true;
 document.getElementById('result').textContent=win?'YOU WIN!':'GAME OVER';
 document.getElementById('message').style.display='flex';
 }
+
 function damage(n){
 if(gameOver)return;
 health=Math.max(0,health-n);
@@ -224,14 +237,49 @@ updateHealth();
 if(health<=0)finish(false);
 }
 
-// Change weapon
+// Door opening and closing
+function doorControl(){
+let nearest=null,best=999;
+for(const b of buildings){
+const d=Math.hypot(player.position.x-b.x,player.position.z-b.z);
+if(d<best){best=d;nearest=b;}
+}
+if(nearest && best<7){
+if(!nearest.doorOpen){
+nearest.door.rotation.y=Math.PI/2;
+nearest.doorOpen=true;
+}
+}else{
+for(const b of buildings){
+if(b.doorOpen){
+b.door.rotation.y=0;
+b.doorOpen=false;
+}
+}
+}
+}
+
+// Building collision
+function blocked(x,z){
+for(const b of buildings){
+const dx=Math.abs(x-b.x);
+const dz=Math.abs(z-b.z);
+if(dx<b.w/2+.6 && dz<b.d/2+.6){
+const inDoor=dz>b.d/2-.9 && dx<1.8;
+if(!inDoor)return true;
+}
+}
+return false;
+}
+
+// Gun switching
 function switchGun(){
 weapon=(weapon+1)%guns.length;
 document.getElementById('gun').textContent=guns[weapon].name;
 }
 document.getElementById('switch').onclick=switchGun;
 
-// Shoot
+// Shooting
 function shoot(){
 if(gameOver)return;
 const now=performance.now(),w=guns[weapon];
@@ -243,12 +291,13 @@ camera.getWorldDirection(dir);
 dir.y=0;
 dir.normalize();
 
+const origin=player.position.clone();
+origin.y=1;
 const b=new THREE.Mesh(
 new THREE.SphereGeometry(.16,6,6),
 new THREE.MeshBasicMaterial({color:w.color})
 );
-b.position.copy(player.position);
-b.position.y=1;
+b.position.copy(origin);
 b.userData.velocity=dir.multiplyScalar(w.speed);
 scene.add(b);
 bullets.push(b);
@@ -288,12 +337,14 @@ const keys={};
 addEventListener('keydown',e=>{
 keys[e.key.toLowerCase()]=true;
 if(e.key.toLowerCase()==='q')switchGun();
+if(e.key.toLowerCase()==='e')doorControl();
 });
 addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
 
 // Mini-map
 const map=document.getElementById('map');
 const ctx=map.getContext('2d');
+
 function drawMap(){
 ctx.clearRect(0,0,240,240);
 ctx.fillStyle='#263e29';
@@ -328,6 +379,7 @@ const y=cy+(k.position.z-player.position.z)*scale;
 ctx.fillStyle='#00ff55';
 ctx.fillRect(x-3,y-3,6,6);
 }
+
 ctx.fillStyle='yellow';
 ctx.beginPath();ctx.arc(cx,cy,7,0,Math.PI*2);ctx.fill();
 }
@@ -342,8 +394,7 @@ if(!gameOver){
 elapsed+=dt;
 zoneRadius=Math.max(12,55-elapsed*.22);
 zone.scale.set(zoneRadius,zoneRadius,1);
-document.getElementById('zoneText').textContent=
-'ZONE: '+Math.floor(zoneRadius)+'m';
+document.getElementById('zoneText').textContent='ZONE: '+Math.floor(zoneRadius)+'m';
 
 const forward=move||keys['w']||keys['arrowup'];
 if(left||keys['a'])player.rotation.y+=3*dt;
@@ -351,8 +402,12 @@ if(right||keys['d'])player.rotation.y-=3*dt;
 
 if(forward){
 const speed=(sprinting||keys['shift'])?13:8;
-player.position.x-=Math.sin(player.rotation.y)*speed*dt;
-player.position.z-=Math.cos(player.rotation.y)*speed*dt;
+const nx=player.position.x-Math.sin(player.rotation.y)*speed*dt;
+const nz=player.position.z-Math.cos(player.rotation.y)*speed*dt;
+if(!blocked(nx,nz)){
+player.position.x=nx;
+player.position.z=nz;
+}
 }
 
 if(keys[' '])shoot();
@@ -361,26 +416,60 @@ if(firing)shoot();
 player.position.x=THREE.MathUtils.clamp(player.position.x,-80,80);
 player.position.z=THREE.MathUtils.clamp(player.position.z,-80,80);
 
+// Detect inside building
+insideBuilding=false;
+for(const b of buildings){
+if(Math.abs(player.position.x-b.x)<b.w/2 &&
+Math.abs(player.position.z-b.z)<b.d/2){
+insideBuilding=true;
+break;
+}
+}
+document.getElementById('status').textContent=
+insideBuilding?'Inside building':'Outside';
+
 // Zone damage
 if(Math.hypot(player.position.x,player.position.z)>zoneRadius)
 damage(8*dt);
 
-// Enemy movement
+// Enemies
 for(const e of enemies){
 const dx=player.position.x-e.position.x;
 const dz=player.position.z-e.position.z;
 const d=Math.hypot(dx,dz);
 if(d>1.5){
-e.position.x+=dx/d*2*dt;
-e.position.z+=dz/d*2*dt;
+const nx=e.position.x+dx/d*2*dt;
+const nz=e.position.z+dz/d*2*dt;
+let blockedEnemy=false;
+for(const b of buildings){
+if(Math.abs(nx-b.x)<b.w/2 &&
+Math.abs(nz-b.z)<b.d/2)blockedEnemy=true;
+}
+if(!blockedEnemy){
+e.position.x=nx;
+e.position.z=nz;
+}
 }else damage(12*dt);
 }
 
-// Bullets
+// Bullets and wall collision
 for(let i=bullets.length-1;i>=0;i--){
 const b=bullets[i];
 b.position.addScaledVector(b.userData.velocity,dt*60);
 let hit=false;
+
+// Check building walls
+for(const house of buildings){
+if(Math.abs(b.position.x-house.x)<house.w/2 &&
+Math.abs(b.position.z-house.z)<house.d/2 &&
+b.position.y<house.h){
+hit=true;
+break;
+}
+}
+
+// Check enemies
+if(!hit){
 for(let j=enemies.length-1;j>=0;j--){
 const target=enemies[j].position.clone().add(new THREE.Vector3(0,.8,0));
 if(b.position.distanceTo(target)<1.2){
@@ -390,13 +479,15 @@ hit=true;
 break;
 }
 }
+}
+
 if(hit||b.position.distanceTo(player.position)>100){
 scene.remove(b);
 bullets.splice(i,1);
 }
 }
 
-// Collect kits
+// Health kits
 for(let i=kits.length-1;i>=0;i--){
 const k=kits[i];
 k.rotation.y+=dt*2;
